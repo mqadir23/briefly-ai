@@ -6,6 +6,10 @@ class AppConstants {
 
   // API
   static const String baseUrl = 'http://10.0.2.2:8000'; // Android emulator localhost
+  static const String apiBaseUrl = baseUrl;
+  static const String apiSummarize = '/summarize';
+  static const String apiTranslate = '/translate';
+  static const String apiInsights = '/insights';
 
   // Hive Box Names
   static const String chatBoxName = 'chat_history';

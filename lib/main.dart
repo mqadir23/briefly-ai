@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'utils/theme.dart';
 import 'utils/constants.dart';
+import 'services/api_service.dart';
 
 // ── Screens  (uncomment one at a time as you build them) ────────────────────
 import 'screens/splash/splash_screen.dart';
@@ -30,6 +31,9 @@ void main() async {
   ));
 
   runApp(const BrieflyApp());
+  // TEMP TEST — remove after checking
+  final reachable = await ApiService.instance.isBackendReachable();
+  debugPrint('Backend reachable: $reachable');
 }
 
 class BrieflyApp extends StatelessWidget {
