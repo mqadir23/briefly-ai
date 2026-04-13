@@ -3,11 +3,15 @@ import 'package:flutter/material.dart';
 class AppColors {
   // Backgrounds
   static const Color background = Color(0xFF0D0D0D);
+  static const Color bgDark = Color(0xFF0D0D0D);
   static const Color surface = Color(0xFF1A1A1A);
   static const Color card = Color(0xFF222222);
 
   // Accent
   static const Color primary = Color(0xFF4F8EF7);
+  static const Color primaryBlue = Color(0xFF4F8EF7);
+  static const Color purpleAi = Color(0xFF7C3AED);
+  static const Color amberAccent = Color(0xFFF5A623);
   static const Color secondary = Color(0xFFF5A623);
 
   // Text
@@ -17,11 +21,15 @@ class AppColors {
 
   // Sentiment colors (for InsightLens)
   static const Color positive = Color(0xFF4CAF50);
+  static const Color greenPositive = Color(0xFF4CAF50);
   static const Color negative = Color(0xFFE53935);
+  static const Color redNegative = Color(0xFFE53935);
   static const Color neutral = Color(0xFFFFB300);
 
   // Other
   static const Color divider = Color(0xFF2A2A2A);
+  static const Color dividerColor = Color(0xFF2A2A2A);
+  static const Color bgCard = Color(0xFF222222);
   static const Color error = Color(0xFFCF6679);
 }
 
