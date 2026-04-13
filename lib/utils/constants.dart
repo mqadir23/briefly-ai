@@ -54,6 +54,13 @@ class AppConstants {
     'Europe'
   ];
 
+  // Analytics
+  static const List<String> timeFilters = [
+    'Last 7 Days',
+    'Last 30 Days',
+    'Last 90 Days',
+  ];
+
   static const Map<String, String> supportedLanguages = {
     'en': 'English',
     'es': 'Español',

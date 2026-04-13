@@ -10,8 +10,8 @@ import 'screens/onboarding/onboarding_screen.dart';
 import 'screens/home/home_screen.dart';
 import 'screens/chat/chat_screen.dart';
 import 'screens/analytics/analytics_screen.dart';
-// import 'screens/history/history_screen.dart';
-// import 'screens/settings/settings_screen.dart';
+import 'screens/history/history_screen.dart';
+import 'screens/settings/settings_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -52,8 +52,8 @@ class BrieflyApp extends StatelessWidget {
         '/home':       (_) => const HomeScreen(),
         '/chat':       (_) => const ChatScreen(),
         '/analytics':  (_) => const AnalyticsScreen(),
-        // '/history':    (_) => const HistoryScreen(),
-        // '/settings':   (_) => const SettingsScreen(),
+        '/history':    (_) => const HistoryScreen(),
+        '/settings':   (_) => const SettingsScreen(),
       },
     );
   }

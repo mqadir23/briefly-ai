@@ -30,6 +30,7 @@ class AppColors {
   static const Color divider = Color(0xFF2A2A2A);
   static const Color dividerColor = Color(0xFF2A2A2A);
   static const Color bgCard = Color(0xFF222222);
+  static const Color bgCardAlt = Color(0xFF262626);
   static const Color error = Color(0xFFCF6679);
 }
 
