@@ -1,24 +1,30 @@
 // lib/screens/analytics/analytics_screen.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
+import 'package:shimmer/shimmer.dart';
 import '../../utils/constants.dart';
-import '../../models/insight.dart';
 import '../../utils/theme.dart';
+import '../../models/insight.dart';
+import '../../services/api_service.dart';
+import '../../providers/preferences_provider.dart';
 
-class AnalyticsScreen extends StatefulWidget {
+class AnalyticsScreen extends ConsumerStatefulWidget {
   const AnalyticsScreen({super.key});
 
   @override
-  State<AnalyticsScreen> createState() => _AnalyticsScreenState();
+  ConsumerState<AnalyticsScreen> createState() => _AnalyticsScreenState();
 }
 
-class _AnalyticsScreenState extends State<AnalyticsScreen>
+class _AnalyticsScreenState extends ConsumerState<AnalyticsScreen>
     with SingleTickerProviderStateMixin {
   String _selectedTime   = 'Last 7 Days';
   String _selectedRegion = 'Global';
   late AnimationController _fadeCtrl;
   late Animation<double>   _fadeAnim;
-  final InsightData _data = InsightData.mock();
+  InsightData? _data;
+  bool _loading = true;
+  String? _error;
 
   @override
   void initState() {
@@ -26,15 +32,62 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
     _fadeCtrl = AnimationController(
       vsync: this, duration: const Duration(milliseconds: 500));
     _fadeAnim = CurvedAnimation(parent: _fadeCtrl, curve: Curves.easeIn);
-    _fadeCtrl.forward();
+    _loadInsights();
   }
 
   @override
   void dispose() { _fadeCtrl.dispose(); super.dispose(); }
 
+  Future<void> _loadInsights() async {
+    setState(() { _loading = true; _error = null; });
+
+    final prefs  = ref.read(preferencesProvider);
+    final result = await ApiService.instance.getInsights(
+      region:     _selectedRegion,
+      timeFilter: _selectedTime,
+      interests:  prefs.interests,
+    );
+
+    if (!mounted) return;
+
+    if (result.isSuccess) {
+      final r = result.data!;
+      setState(() {
+        _data = InsightData(
+          positivePercent: r.positivePercent,
+          neutralPercent:  r.neutralPercent,
+          negativePercent: r.negativePercent,
+          totalArticlesAnalyzed: r.totalArticles,
+          hotTopics: r.hotTopics,
+          trendPoints: r.trendPoints.map((tp) => TrendPoint(
+            label: tp['date']?.toString() ?? '',
+            value: (tp['value'] ?? 0.0).toDouble(),
+          )).toList(),
+          topEntities: r.topEntities.map((te) => TopEntity(
+            name:      te['name']?.toString() ?? '',
+            mentions:  (te['mentions'] ?? 0) as int,
+            sentiment: te['sentiment']?.toString() ?? 'neutral',
+            type:      te['type']?.toString() ?? 'company',
+          )).toList(),
+        );
+        _loading = false;
+      });
+      _fadeCtrl.reset();
+      _fadeCtrl.forward();
+    } else {
+      // Fallback to mock data on error
+      setState(() {
+        _data = InsightData.mock();
+        _loading = false;
+        _error = result.error;
+      });
+      _fadeCtrl.reset();
+      _fadeCtrl.forward();
+    }
+  }
+
   void _onFilterChange() {
-    _fadeCtrl.reset();
-    _fadeCtrl.forward();
+    _loadInsights();
   }
 
   @override
@@ -50,51 +103,149 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
           ),
         ],
       ),
-      body: FadeTransition(
-        opacity: _fadeAnim,
-        child: CustomScrollView(
-          slivers: [
-            SliverPadding(
-              padding: const EdgeInsets.all(AppConstants.paddingLg),
-              sliver: SliverList(
-                delegate: SliverChildListDelegate([
-                  // Filters
-                  _buildFilters(),
-                  const SizedBox(height: 24),
+      body: _loading
+          ? _buildLoadingState()
+          : FadeTransition(
+              opacity: _fadeAnim,
+              child: CustomScrollView(
+                slivers: [
+                  SliverPadding(
+                    padding: const EdgeInsets.all(AppConstants.paddingLg),
+                    sliver: SliverList(
+                      delegate: SliverChildListDelegate([
+                        // Error banner
+                        if (_error != null) ...[
+                          _buildErrorBanner(),
+                          const SizedBox(height: 12),
+                        ],
 
-                  // Stats row
-                  _buildStatsRow(),
-                  const SizedBox(height: 24),
+                        // Filters
+                        _buildFilters(),
+                        const SizedBox(height: 24),
 
-                  // Trend line chart
-                  _buildSectionHeader('News Volume Trend', Icons.show_chart_rounded),
-                  const SizedBox(height: 12),
-                  _buildTrendChart(),
-                  const SizedBox(height: 24),
+                        // Stats row
+                        _buildStatsRow(),
+                        const SizedBox(height: 24),
 
-                  // Sentiment pie
-                  _buildSectionHeader('Sentiment Breakdown', Icons.pie_chart_rounded),
-                  const SizedBox(height: 12),
-                  _buildSentimentPie(),
-                  const SizedBox(height: 24),
+                        // Trend line chart
+                        _buildSectionHeader('News Volume Trend', Icons.show_chart_rounded),
+                        const SizedBox(height: 12),
+                        _buildTrendChart(),
+                        const SizedBox(height: 24),
 
-                  // Hot topics
-                  _buildSectionHeader('Hot Topics', Icons.local_fire_department_rounded),
-                  const SizedBox(height: 12),
-                  _buildHotTopics(),
-                  const SizedBox(height: 24),
+                        // Sentiment pie
+                        _buildSectionHeader('Sentiment Breakdown', Icons.pie_chart_rounded),
+                        const SizedBox(height: 12),
+                        _buildSentimentPie(),
+                        const SizedBox(height: 24),
 
-                  // Top entities
-                  _buildSectionHeader('Top Entities', Icons.people_alt_rounded),
-                  const SizedBox(height: 12),
-                  _buildTopEntities(),
+                        // Hot topics
+                        _buildSectionHeader('Hot Topics', Icons.local_fire_department_rounded),
+                        const SizedBox(height: 12),
+                        _buildHotTopics(),
+                        const SizedBox(height: 24),
 
-                  const SizedBox(height: 32),
-                ]),
+                        // Top entities
+                        _buildSectionHeader('Top Entities', Icons.people_alt_rounded),
+                        const SizedBox(height: 12),
+                        _buildTopEntities(),
+
+                        const SizedBox(height: 32),
+                      ]),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ],
+    );
+  }
+
+  Widget _buildLoadingState() {
+    return Padding(
+      padding: const EdgeInsets.all(AppConstants.paddingLg),
+      child: Shimmer.fromColors(
+        baseColor: AppColors.dividerColor,
+        highlightColor: AppColors.dividerColor.withOpacity(0.5),
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Filter shimmer
+              Row(
+                children: [
+                Expanded(child: Container(height: 40, decoration: BoxDecoration(
+                  color: AppColors.dividerColor,
+                  borderRadius: BorderRadius.circular(AppConstants.radiusSm)))),
+                const SizedBox(width: 10),
+                Expanded(child: Container(height: 40, decoration: BoxDecoration(
+                  color: AppColors.dividerColor,
+                  borderRadius: BorderRadius.circular(AppConstants.radiusSm)))),
+              ],
+            ),
+            const SizedBox(height: 24),
+            // Stats shimmer
+            Row(
+              children: List.generate(3, (_) => Expanded(
+                child: Container(
+                  margin: const EdgeInsets.only(right: 10),
+                  height: 80,
+                  decoration: BoxDecoration(
+                    color: AppColors.dividerColor,
+                    borderRadius: BorderRadius.circular(AppConstants.radiusMd)),
+                ),
+              )),
+            ),
+            const SizedBox(height: 24),
+            // Chart shimmer
+            Container(height: 180, decoration: BoxDecoration(
+              color: AppColors.dividerColor,
+              borderRadius: BorderRadius.circular(AppConstants.radiusLg))),
+            const SizedBox(height: 24),
+            // Pie shimmer
+            Container(height: 170, decoration: BoxDecoration(
+              color: AppColors.dividerColor,
+              borderRadius: BorderRadius.circular(AppConstants.radiusLg))),
+            const SizedBox(height: 24),
+            // Entity rows shimmer
+            ...List.generate(4, (_) => Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              height: 48, decoration: BoxDecoration(
+                color: AppColors.dividerColor,
+                borderRadius: BorderRadius.circular(AppConstants.radiusMd)),
+            )),
+            ],
+          ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildErrorBanner() {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppColors.amberAccent.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(AppConstants.radiusSm),
+        border: Border.all(color: AppColors.amberAccent.withOpacity(0.3)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.info_outline_rounded,
+              color: AppColors.amberAccent, size: 16),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              'Using demo data — $_error',
+              style: const TextStyle(
+                color: AppColors.amberAccent, fontSize: 11, height: 1.3),
+            ),
+          ),
+          GestureDetector(
+            onTap: _loadInsights,
+            child: const Icon(Icons.refresh_rounded,
+                color: AppColors.amberAccent, size: 16),
+          ),
+        ],
       ),
     );
   }
@@ -130,25 +281,26 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
   }
 
   Widget _buildStatsRow() {
+    final data = _data!;
     return Row(
       children: [
         _StatCard(
           label: 'Articles',
-          value: '${_data.totalArticlesAnalyzed}',
+          value: '${data.totalArticlesAnalyzed}',
           icon: Icons.article_rounded,
           color: AppColors.primaryBlue,
         ),
         const SizedBox(width: 10),
         _StatCard(
           label: 'Positive',
-          value: '${_data.positivePercent.toInt()}%',
+          value: '${data.positivePercent.toInt()}%',
           icon: Icons.trending_up_rounded,
           color: AppColors.greenPositive,
         ),
         const SizedBox(width: 10),
         _StatCard(
           label: 'Negative',
-          value: '${_data.negativePercent.toInt()}%',
+          value: '${data.negativePercent.toInt()}%',
           icon: Icons.trending_down_rounded,
           color: AppColors.redNegative,
         ),
@@ -172,7 +324,8 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
   }
 
   Widget _buildTrendChart() {
-    final spots = _data.trendPoints.asMap().entries.map((e) =>
+    final data = _data!;
+    final spots = data.trendPoints.asMap().entries.map((e) =>
         FlSpot(e.key.toDouble(), e.value.value)).toList();
 
     return Container(
@@ -188,7 +341,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
           gridData: FlGridData(
             show: true,
             drawVerticalLine: false,
-            getDrawingHorizontalLine: (_) => FlLine(
+            getDrawingHorizontalLine: (_) => const FlLine(
               color: AppColors.dividerColor,
               strokeWidth: 1,
             ),
@@ -210,12 +363,20 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
                 showTitles: true,
                 reservedSize: 28,
                 getTitlesWidget: (v, _) {
-                  final days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-                  final idx  = v.toInt();
-                  if (idx < 0 || idx >= days.length) return const SizedBox();
-                  return Text(days[idx],
-                    style: const TextStyle(
-                      color: AppColors.textHint, fontSize: 10));
+                  final idx = v.toInt();
+                  if (idx < 0 || idx >= data.trendPoints.length) {
+                    return const SizedBox();
+                  }
+                  return Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      data.trendPoints[idx].label,
+                      style: const TextStyle(
+                        color: AppColors.textHint,
+                        fontSize: 9,
+                      ),
+                    ),
+                  );
                 },
               ),
             ),
@@ -255,6 +416,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
   }
 
   Widget _buildSentimentPie() {
+    final data = _data!;
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -272,19 +434,19 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
                 centerSpaceRadius: 35,
                 sections: [
                   PieChartSectionData(
-                    value: _data.positivePercent,
+                    value: data.positivePercent,
                     color: AppColors.greenPositive,
                     radius: 28,
                     showTitle: false,
                   ),
                   PieChartSectionData(
-                    value: _data.neutralPercent,
+                    value: data.neutralPercent,
                     color: AppColors.textHint,
                     radius: 24,
                     showTitle: false,
                   ),
                   PieChartSectionData(
-                    value: _data.negativePercent,
+                    value: data.negativePercent,
                     color: AppColors.redNegative,
                     radius: 28,
                     showTitle: false,
@@ -303,19 +465,19 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
                 _PieLegend(
                   color: AppColors.greenPositive,
                   label: 'Positive',
-                  percent: _data.positivePercent,
+                  percent: data.positivePercent,
                 ),
                 const SizedBox(height: 12),
                 _PieLegend(
                   color: AppColors.textHint,
                   label: 'Neutral',
-                  percent: _data.neutralPercent,
+                  percent: data.neutralPercent,
                 ),
                 const SizedBox(height: 12),
                 _PieLegend(
                   color: AppColors.redNegative,
                   label: 'Negative',
-                  percent: _data.negativePercent,
+                  percent: data.negativePercent,
                 ),
               ],
             ),
@@ -326,9 +488,10 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
   }
 
   Widget _buildHotTopics() {
+    final data = _data!;
     return Wrap(
       spacing: 10, runSpacing: 10,
-      children: _data.hotTopics.asMap().entries.map((e) {
+      children: data.hotTopics.asMap().entries.map((e) {
         final colors = [
           AppColors.primaryBlue,
           AppColors.amberAccent,
@@ -360,6 +523,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
   }
 
   Widget _buildTopEntities() {
+    final data = _data!;
     return Container(
       decoration: BoxDecoration(
         color: AppColors.bgCard,
@@ -367,9 +531,9 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
         border: Border.all(color: AppColors.dividerColor),
       ),
       child: Column(
-        children: _data.topEntities.asMap().entries.map((e) {
+        children: data.topEntities.asMap().entries.map((e) {
           final entity = e.value;
-          final maxM   = _data.topEntities.first.mentions.toDouble();
+          final maxM   = data.topEntities.first.mentions.toDouble();
           final pct    = entity.mentions / maxM;
 
           Color sentColor;
@@ -388,7 +552,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen>
 
           return Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: e.key < _data.topEntities.length - 1
+            decoration: e.key < data.topEntities.length - 1
                 ? const BoxDecoration(
                     border: Border(
                         bottom: BorderSide(color: AppColors.dividerColor)))

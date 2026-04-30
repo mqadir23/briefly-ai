@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+openai
+python-dotenv
+bcrypt
+pyjwt
+aiosqlite
+python-multipart
+httpx

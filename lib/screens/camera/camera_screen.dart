@@ -568,7 +568,7 @@ class _BracketPainter extends CustomPainter {
       ..strokeCap = StrokeCap.round;
 
     final corners = [
-      [Offset(r, 0), Offset(r + len, 0), Offset(0, r), Offset(0, r + len)],
+      [const Offset(r, 0), const Offset(r + len, 0), const Offset(0, r), const Offset(0, r + len)],
       [Offset(size.width - r, 0), Offset(size.width - r - len, 0),
        Offset(size.width, r), Offset(size.width, r + len)],
       [Offset(r, size.height), Offset(r + len, size.height),

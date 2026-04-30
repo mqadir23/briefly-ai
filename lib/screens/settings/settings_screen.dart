@@ -1,25 +1,32 @@
 // lib/screens/settings/settings_screen.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'package:share_plus/share_plus.dart';
+import 'dart:convert';
 import '../../utils/constants.dart';
 import '../../utils/theme.dart';
+import '../../providers/preferences_provider.dart';
+import '../../providers/history_provider.dart';
+import '../profile/profile_screen.dart';
 
-class SettingsScreen extends StatefulWidget {
+class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
   @override
-  State<SettingsScreen> createState() => _SettingsScreenState();
+  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen> {
-  bool _eli5Mode         = false;
-  bool _breakingNotifs   = true;
-  bool _darkMode         = true;
-  String _language       = 'en';
-  String _region         = 'Global';
-  final List<String> _interests = ['Technology', 'Finance', 'Pakistan'];
+class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+  bool _darkMode = true; // Display only
 
   @override
   Widget build(BuildContext context) {
+    final prefs = ref.watch(preferencesProvider);
+    final displayName = prefs.displayName.isNotEmpty ? prefs.displayName : 'User';
+    final email = prefs.email.isNotEmpty ? prefs.email : 'user@student.edu.pk';
+    final initial = displayName[0].toUpperCase();
+
     return Scaffold(
       backgroundColor: AppColors.bgDark,
       appBar: AppBar(title: const Text('Settings & Profile')),
@@ -27,7 +34,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
         padding: const EdgeInsets.all(AppConstants.paddingLg),
         children: [
           // Profile card
-          _buildProfileCard(),
+          GestureDetector(
+            onTap: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => const ProfileScreen())),
+            child: _buildProfileCard(displayName, email, initial),
+          ),
           const SizedBox(height: 24),
 
           // Preferences
@@ -37,21 +48,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _DropdownTile(
               icon: Icons.translate_rounded,
               title: 'Summary Language',
-              value: AppConstants.supportedLanguages[_language] ?? 'English',
+              value: AppConstants.supportedLanguages[prefs.preferredLanguage] ?? 'English',
               options: AppConstants.supportedLanguages.values.toList(),
               onChanged: (v) {
                 final key = AppConstants.supportedLanguages.entries
                     .firstWhere((e) => e.value == v).key;
-                setState(() => _language = key);
+                ref.read(preferencesProvider.notifier).updateLanguage(key);
               },
             ),
             _divider(),
             _DropdownTile(
               icon: Icons.public_rounded,
               title: 'Default Region',
-              value: _region,
+              value: prefs.region,
               options: AppConstants.regions,
-              onChanged: (v) => setState(() => _region = v!),
+              onChanged: (v) =>
+                  ref.read(preferencesProvider.notifier).updateRegion(v!),
             ),
           ]),
 
@@ -60,7 +72,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           // Interests
           _buildSectionLabel('INTERESTS'),
           const SizedBox(height: 10),
-          _buildInterestsCard(),
+          _buildInterestsCard(prefs.interests),
 
           const SizedBox(height: 20),
 
@@ -72,25 +84,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
               icon: Icons.child_care_rounded,
               title: 'ELI5 Mode',
               subtitle: 'Simplified explanations',
-              value: _eli5Mode,
+              value: prefs.eli5Mode,
               activeColor: AppColors.amberAccent,
-              onChanged: (v) => setState(() => _eli5Mode = v),
+              onChanged: (v) =>
+                  ref.read(preferencesProvider.notifier).toggleEli5(v),
             ),
             _divider(),
             _SwitchTile(
               icon: Icons.notifications_rounded,
               title: 'Breaking News Alerts',
               subtitle: 'Push notifications for top stories',
-              value: _breakingNotifs,
-              onChanged: (v) => setState(() => _breakingNotifs = v),
+              value: prefs.breakingNotifications,
+              onChanged: (v) =>
+                  ref.read(preferencesProvider.notifier).toggleBreakingNotifications(v),
             ),
             _divider(),
             _SwitchTile(
               icon: Icons.dark_mode_rounded,
               title: 'Dark Mode',
               subtitle: 'Optimised for night reading',
-              value: _darkMode,
-              onChanged: (v) => setState(() => _darkMode = v),
+              value: prefs.isDarkMode,
+              onChanged: (v) =>
+                  ref.read(preferencesProvider.notifier).toggleDarkMode(v),
             ),
           ]),
 
@@ -105,21 +120,47 @@ class _SettingsScreenState extends State<SettingsScreen> {
               title: 'Clear History',
               subtitle: 'Remove all saved summaries',
               onTap: () => _showConfirmDialog(
-                  'Clear History', 'This will delete all summaries.'),
+                  'Clear History', 'This will delete all summaries.',
+                  onConfirm: () {
+                    ref.read(historyProvider.notifier).clearAll();
+                    Navigator.pop(context);
+                  }),
             ),
             _divider(),
             _NavTile(
               icon: Icons.bookmark_remove_rounded,
               title: 'Clear Bookmarks',
               subtitle: 'Remove all bookmarked articles',
-              onTap: () {},
+              onTap: () => _showConfirmDialog(
+                  'Clear Bookmarks', 'This will un-bookmark all articles.',
+                  onConfirm: () {
+                    ref.read(historyProvider.notifier).clearBookmarks();
+                    Navigator.pop(context);
+                  }),
             ),
             _divider(),
             _NavTile(
               icon: Icons.download_rounded,
               title: 'Export Data',
-              subtitle: 'Download summaries as JSON',
-              onTap: () {},
+              subtitle: 'Share summaries as JSON',
+              onTap: () {
+                final history = ref.read(historyProvider);
+                if (history.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('No summaries to export')),
+                  );
+                  return;
+                }
+                final jsonList = history.map((s) => {
+                  'headline':  s.headline,
+                  'bullets':   s.bullets,
+                  'sentiment': s.sentiment,
+                  'inputType': s.inputType,
+                  'createdAt': s.createdAt.toIso8601String(),
+                }).toList();
+                final jsonStr = const JsonEncoder.withIndent('  ').convert(jsonList);
+                Share.share(jsonStr, subject: 'Briefly AI — Summaries Export');
+              },
             ),
           ]),
 
@@ -129,19 +170,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _buildSectionLabel('ABOUT'),
           const SizedBox(height: 10),
           _buildCard([
-            _NavTile(
+            const _NavTile(
               icon: Icons.info_outline_rounded,
               title: 'App Version',
               subtitle: 'v${AppConstants.appVersion}',
               onTap: null,
-              trailing: const SizedBox(),
+              trailing: SizedBox(),
             ),
             _divider(),
             _NavTile(
               icon: Icons.code_rounded,
               title: 'GitHub Repository',
               subtitle: 'mqadir23/briefly-ai',
-              onTap: () {},
+              onTap: () => launchUrl(
+                Uri.parse('https://github.com/mqadir23/briefly-ai'),
+                mode: LaunchMode.externalApplication,
+              ),
             ),
           ]),
 
@@ -149,7 +193,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           // Sign out
           OutlinedButton.icon(
-            onPressed: () {},
+            onPressed: () => _showConfirmDialog(
+                'Sign Out', 'Your settings will be reset.',
+                onConfirm: () {
+                  ref.read(preferencesProvider.notifier).resetPreferences();
+                  ref.read(historyProvider.notifier).clearAll();
+                  Navigator.of(context).pushNamedAndRemoveUntil(
+                      '/onboarding', (_) => false);
+                }),
             icon: const Icon(Icons.logout_rounded, size: 16),
             label: const Text('Sign Out'),
             style: OutlinedButton.styleFrom(
@@ -173,7 +224,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   // ── Profile card ────────────────────────────────────────────────────────────
-  Widget _buildProfileCard() {
+  Widget _buildProfileCard(String name, String email, String initial) {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -194,15 +245,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
           // Avatar
           Container(
             width: 56, height: 56,
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               shape: BoxShape.circle,
-              gradient: const LinearGradient(
+              gradient: LinearGradient(
                 colors: [AppColors.primaryBlue, AppColors.purpleAi],
               ),
             ),
-            child: const Center(
-              child: Text('D',
-                style: TextStyle(color: Colors.white,
+            child: Center(
+              child: Text(initial,
+                style: const TextStyle(color: Colors.white,
                     fontSize: 22, fontWeight: FontWeight.w700)),
             ),
           ),
@@ -211,15 +262,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Muhammad Daniyal',
-                  style: TextStyle(
+                Text(name,
+                  style: const TextStyle(
                     color: AppColors.textPrimary,
                     fontSize: 16, fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(height: 2),
-                const Text('daniyal@student.edu.pk',
-                  style: TextStyle(
+                Text(email,
+                  style: const TextStyle(
                       color: AppColors.textSecondary, fontSize: 12)),
                 const SizedBox(height: 6),
                 Container(
@@ -249,7 +300,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   // ── Interests chip editor ───────────────────────────────────────────────────
-  Widget _buildInterestsCard() {
+  Widget _buildInterestsCard(List<String> interests) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -270,9 +321,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
           Wrap(
             spacing: 8, runSpacing: 8,
             children: [
-              ..._interests.map((i) => Chip(
+              ...interests.map((i) => Chip(
                 label: Text(i),
-                onDeleted: () => setState(() => _interests.remove(i)),
+                onDeleted: () {
+                  final updated = List<String>.from(interests)..remove(i);
+                  ref.read(preferencesProvider.notifier).updateInterests(updated);
+                },
                 deleteIcon: const Icon(Icons.close, size: 12),
                 labelStyle: const TextStyle(
                     color: AppColors.primaryBlue, fontSize: 11),
@@ -286,7 +340,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     color: AppColors.textHint, fontSize: 11),
                 backgroundColor: AppColors.bgCardAlt,
                 side: const BorderSide(color: AppColors.dividerColor),
-                onPressed: () => _showAddInterestDialog(),
+                onPressed: () => _showAddInterestDialog(interests),
               ),
             ],
           ),
@@ -314,7 +368,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Widget _divider() => const Divider(height: 1, indent: 50);
 
-  void _showConfirmDialog(String title, String message) {
+  void _showConfirmDialog(String title, String message,
+      {required VoidCallback onConfirm}) {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
@@ -329,7 +384,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: onConfirm,
             child: const Text('Confirm',
               style: TextStyle(color: AppColors.redNegative)),
           ),
@@ -338,7 +393,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  void _showAddInterestDialog() {
+  void _showAddInterestDialog(List<String> currentInterests) {
     showDialog(
       context: context,
       builder: (_) => AlertDialog(
@@ -348,11 +403,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
         content: Wrap(
           spacing: 8, runSpacing: 8,
           children: AppConstants.newsCategories
-              .where((c) => !_interests.contains(c))
+              .where((c) => !currentInterests.contains(c))
               .map((c) => ActionChip(
                 label: Text(c),
                 onPressed: () {
-                  setState(() => _interests.add(c));
+                  final updated = [...currentInterests, c];
+                  ref.read(preferencesProvider.notifier).updateInterests(updated);
                   Navigator.pop(context);
                 },
               )).toList(),
@@ -404,7 +460,7 @@ class _SwitchTile extends StatelessWidget {
           Switch(
             value: value,
             onChanged: onChanged,
-            activeColor: activeColor ?? AppColors.primaryBlue,
+            activeThumbColor: activeColor ?? AppColors.primaryBlue,
             materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
           ),
         ],

@@ -1,16 +1,20 @@
 // lib/screens/history/history_screen.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../utils/constants.dart';
 import '../../utils/theme.dart';
+import '../../models/summary.dart';
+import '../../providers/history_provider.dart';
+import '../article_detail/article_detail_screen.dart';
 
-class HistoryScreen extends StatefulWidget {
+class HistoryScreen extends ConsumerStatefulWidget {
   const HistoryScreen({super.key});
 
   @override
-  State<HistoryScreen> createState() => _HistoryScreenState();
+  ConsumerState<HistoryScreen> createState() => _HistoryScreenState();
 }
 
-class _HistoryScreenState extends State<HistoryScreen>
+class _HistoryScreenState extends ConsumerState<HistoryScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabCtrl;
   String _searchQuery = '';
@@ -91,21 +95,56 @@ class _HistoryScreenState extends State<HistoryScreen>
   }
 }
 
-class _HistoryList extends StatelessWidget {
+class _HistoryList extends ConsumerWidget {
   final String searchQuery;
   final bool bookmarkedOnly;
   const _HistoryList({required this.searchQuery, required this.bookmarkedOnly});
 
+  String _dateGroup(DateTime dt) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final date  = DateTime(dt.year, dt.month, dt.day);
+    final diff  = today.difference(date).inDays;
+    if (diff == 0) return 'TODAY';
+    if (diff == 1) return 'YESTERDAY';
+    return '${dt.day.toString().padLeft(2, '0')} ${_monthName(dt.month)}';
+  }
+
+  String _monthName(int month) {
+    const months = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return months[month];
+  }
+
+  String _timeAgo(DateTime dt) {
+    final diff = DateTime.now().difference(dt);
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    return '${dt.day}/${dt.month}';
+  }
+
   @override
-  Widget build(BuildContext context) {
-    // Mock data
-    final all = _mockHistory();
-    final filtered = all.where((h) {
-      if (bookmarkedOnly && !h.bookmarked) return false;
-      if (searchQuery.isNotEmpty &&
-          !h.headline.toLowerCase().contains(searchQuery.toLowerCase())) return false;
-      return true;
-    }).toList();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final history = ref.watch(historyProvider);
+    final notifier = ref.read(historyProvider.notifier);
+
+    List<Summary> filtered;
+    if (bookmarkedOnly) {
+      filtered = notifier.bookmarked;
+    } else if (searchQuery.isNotEmpty) {
+      filtered = notifier.search(searchQuery);
+    } else {
+      filtered = history;
+    }
+
+    // Also apply search to bookmarked
+    if (bookmarkedOnly && searchQuery.isNotEmpty) {
+      final q = searchQuery.toLowerCase();
+      filtered = filtered.where((s) =>
+          s.headline.toLowerCase().contains(q) ||
+          s.originalText.toLowerCase().contains(q)).toList();
+    }
 
     if (filtered.isEmpty) {
       return Center(
@@ -115,7 +154,9 @@ class _HistoryList extends StatelessWidget {
             Icon(
               bookmarkedOnly
                   ? Icons.bookmark_border_rounded
-                  : Icons.history_rounded,
+                  : searchQuery.isNotEmpty
+                      ? Icons.search_off_rounded
+                      : Icons.history_rounded,
               color: AppColors.textHint, size: 48,
             ),
             const SizedBox(height: 12),
@@ -123,8 +164,8 @@ class _HistoryList extends StatelessWidget {
               bookmarkedOnly
                   ? 'No bookmarks yet'
                   : searchQuery.isNotEmpty
-                      ? 'No results found'
-                      : 'No summaries yet',
+                      ? 'No results for \'$searchQuery\''
+                      : 'No summaries yet. Start chatting!',
               style: const TextStyle(
                   color: AppColors.textSecondary, fontSize: 15),
             ),
@@ -134,9 +175,10 @@ class _HistoryList extends StatelessWidget {
     }
 
     // Group by date
-    final Map<String, List<_HistoryItem>> grouped = {};
-    for (final h in filtered) {
-      grouped.putIfAbsent(h.dateGroup, () => []).add(h);
+    final Map<String, List<Summary>> grouped = {};
+    for (final s in filtered) {
+      final group = _dateGroup(s.createdAt);
+      grouped.putIfAbsent(group, () => []).add(s);
     }
 
     return ListView(
@@ -152,63 +194,30 @@ class _HistoryList extends StatelessWidget {
               ),
             ),
           ),
-          ...entry.value.map((h) => _HistoryTile(item: h)),
+          ...entry.value.map((s) => _HistoryTile(
+            summary: s,
+            timeAgo: _timeAgo(s.createdAt),
+            onBookmarkTap: () => ref.read(historyProvider.notifier).toggleBookmark(s.id),
+            onTap: () => Navigator.push(context,
+                MaterialPageRoute(builder: (_) => ArticleDetailScreen(summary: s))),
+          )),
         ],
         const SizedBox(height: 80),
       ],
     );
   }
-
-  List<_HistoryItem> _mockHistory() => [
-    _HistoryItem(
-      id: '1',
-      headline: 'NVIDIA surpasses \$3T market cap amid AI chip demand surge',
-      source: 'Reuters', timeAgo: '2h ago', sentiment: 'positive',
-      inputType: 'url', bookmarked: true, dateGroup: 'TODAY',
-    ),
-    _HistoryItem(
-      id: '2',
-      headline: 'Pakistan\'s IMF deal faces fresh hurdle over energy reforms',
-      source: 'Dawn', timeAgo: '5h ago', sentiment: 'negative',
-      inputType: 'voice', bookmarked: false, dateGroup: 'TODAY',
-    ),
-    _HistoryItem(
-      id: '3',
-      headline: 'OpenAI releases GPT-5 with multimodal reasoning capabilities',
-      source: 'The Verge', timeAgo: 'Yesterday', sentiment: 'positive',
-      inputType: 'text', bookmarked: true, dateGroup: 'YESTERDAY',
-    ),
-    _HistoryItem(
-      id: '4',
-      headline: 'Fed holds rates steady; signals one cut in 2026',
-      source: 'WSJ', timeAgo: 'Yesterday', sentiment: 'neutral',
-      inputType: 'url', bookmarked: false, dateGroup: 'YESTERDAY',
-    ),
-    _HistoryItem(
-      id: '5',
-      headline: 'KSE-100 closes above 93,000 on IMF optimism',
-      source: 'Geo News', timeAgo: '3 days ago', sentiment: 'positive',
-      inputType: 'ocr', bookmarked: false, dateGroup: 'EARLIER',
-    ),
-  ];
-}
-
-class _HistoryItem {
-  final String id, headline, source, timeAgo, sentiment, inputType, dateGroup;
-  final bool bookmarked;
-  const _HistoryItem({
-    required this.id, required this.headline, required this.source,
-    required this.timeAgo, required this.sentiment, required this.inputType,
-    required this.bookmarked, required this.dateGroup,
-  });
 }
 
 class _HistoryTile extends StatelessWidget {
-  final _HistoryItem item;
-  const _HistoryTile({required this.item});
+  final Summary summary;
+  final String timeAgo;
+  final VoidCallback onBookmarkTap;
+  final VoidCallback? onTap;
+  const _HistoryTile({required this.summary, required this.timeAgo,
+    required this.onBookmarkTap, this.onTap});
 
   Color get _sentimentColor {
-    switch (item.sentiment) {
+    switch (summary.sentiment) {
       case 'positive': return AppColors.greenPositive;
       case 'negative': return AppColors.redNegative;
       default: return AppColors.textHint;
@@ -216,7 +225,7 @@ class _HistoryTile extends StatelessWidget {
   }
 
   IconData get _inputIcon {
-    switch (item.inputType) {
+    switch (summary.inputType) {
       case 'voice': return Icons.mic_rounded;
       case 'url':   return Icons.link_rounded;
       case 'ocr':   return Icons.document_scanner_rounded;
@@ -226,7 +235,9 @@ class _HistoryTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -252,7 +263,7 @@ class _HistoryTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(item.headline,
+                Text(summary.headline,
                   style: const TextStyle(
                     color: AppColors.textPrimary,
                     fontSize: 13, fontWeight: FontWeight.w500, height: 1.35,
@@ -264,14 +275,14 @@ class _HistoryTile extends StatelessWidget {
                   children: [
                     Icon(_inputIcon, color: AppColors.textHint, size: 10),
                     const SizedBox(width: 4),
-                    Text(item.source,
+                    Text(summary.inputType,
                       style: const TextStyle(
                           color: AppColors.textHint, fontSize: 10)),
                     const SizedBox(width: 8),
                     const Text('·',
                       style: TextStyle(color: AppColors.textHint, fontSize: 10)),
                     const SizedBox(width: 8),
-                    Text(item.timeAgo,
+                    Text(timeAgo,
                       style: const TextStyle(
                           color: AppColors.textHint, fontSize: 10)),
                   ],
@@ -283,17 +294,21 @@ class _HistoryTile extends StatelessWidget {
           const SizedBox(width: 8),
 
           // Bookmark icon
-          Icon(
-            item.bookmarked
-                ? Icons.bookmark_rounded
-                : Icons.bookmark_border_rounded,
-            color: item.bookmarked
-                ? AppColors.amberAccent
-                : AppColors.textHint,
-            size: 18,
+          GestureDetector(
+            onTap: onBookmarkTap,
+            child: Icon(
+              summary.isBookmarked
+                  ? Icons.bookmark_rounded
+                  : Icons.bookmark_border_rounded,
+              color: summary.isBookmarked
+                  ? AppColors.amberAccent
+                  : AppColors.textHint,
+              size: 18,
+            ),
           ),
         ],
       ),
+    ),
     );
   }
 }

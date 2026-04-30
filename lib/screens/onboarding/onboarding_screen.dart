@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../utils/constants.dart';
 import '../../utils/theme.dart';
+import '../../providers/preferences_provider.dart';
 
-class OnboardingScreen extends StatefulWidget {
+class OnboardingScreen extends ConsumerStatefulWidget {
   const OnboardingScreen({super.key});
 
   @override
-  State<OnboardingScreen> createState() => _OnboardingScreenState();
+  ConsumerState<OnboardingScreen> createState() => _OnboardingScreenState();
 }
 
-class _OnboardingScreenState extends State<OnboardingScreen> {
+class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   final PageController _pageController = PageController();
   int _currentPage = 0;
 
@@ -41,8 +43,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
-  void _finish() {
-    Navigator.of(context).pushReplacementNamed('/home');
+  void _finish() async {
+    final notifier = ref.read(preferencesProvider.notifier);
+    await notifier.updateInterests(_selectedInterests.toList());
+    await notifier.updateRegion(_selectedRegion);
+    await notifier.updateLanguage(_selectedLanguage);
+    await notifier.setOnboardingDone();
+    if (mounted) Navigator.of(context).pushReplacementNamed('/home');
   }
 
   bool get _canContinue {
@@ -57,7 +64,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // â”€â”€ Progress dots â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            // ── Progress dots ────────────────────────────────
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
               child: Row(
@@ -65,7 +72,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
             ),
 
-            // â”€â”€ Pages â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            // ── Pages ────────────────────────────────────────
             Expanded(
               child: PageView(
                 controller: _pageController,
@@ -79,7 +86,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               ),
             ),
 
-            // â”€â”€ Bottom buttons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+            // ── Bottom buttons ───────────────────────────────
             Padding(
               padding: const EdgeInsets.fromLTRB(24, 0, 24, 28),
               child: Column(
@@ -116,7 +123,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
-  // â”€â”€ Progress dot â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Progress dot ───────────────────────────────────────────────────────────
 
   Widget _buildDot(int index) {
     final active = index == _currentPage;
@@ -134,7 +141,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
-  // â”€â”€ Page 1: Interests â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Page 1: Interests ─────────────────────────────────────────────────────
 
   Widget _buildInterestsPage() {
     return Padding(
@@ -189,9 +196,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                           width: selected ? 1.5 : 1,
                         ),
                       ),
-                      // âœ… FIX: no icon inside the chip row â€” avoids overflow
+                      // ✅ FIX: no icon inside the chip row — avoids overflow
                       child: Text(
-                        selected ? 'âœ“  $cat' : cat,
+                        selected ? '✓  $cat' : cat,
                         style: TextStyle(
                           color: selected
                               ? AppColors.primaryBlue
@@ -213,7 +220,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
-  // â”€â”€ Page 2: Region â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Page 2: Region ────────────────────────────────────────────────────────
 
   Widget _buildRegionPage() {
     return Padding(
@@ -300,7 +307,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
-  // â”€â”€ Page 3: Language â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ── Page 3: Language ──────────────────────────────────────────────────────
 
   Widget _buildLanguagePage() {
     return Padding(

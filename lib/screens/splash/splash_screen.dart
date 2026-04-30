@@ -1,7 +1,10 @@
 // lib/screens/splash/splash_screen.dart
 import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart';
+import '../../models/user_preferences.dart';
 import '../../utils/constants.dart';
 import '../../utils/theme.dart';
+import '../../services/auth_service.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -141,8 +144,20 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   void _navigate() {
-    // Later: check Hive prefs — if onboarding done, go '/home'
-    Navigator.of(context).pushReplacementNamed('/onboarding');
+    // 1. Check if authenticated
+    if (!AuthService.instance.isAuthenticated) {
+      Navigator.of(context).pushReplacementNamed('/login');
+      return;
+    }
+
+    // 2. Check if onboarding was already completed
+    final box = Hive.box<UserPreferences>(AppConstants.hiveBoxSettings);
+    final prefs = box.get('prefs');
+    if (prefs != null && prefs.onboardingDone) {
+      Navigator.of(context).pushReplacementNamed('/home');
+    } else {
+      Navigator.of(context).pushReplacementNamed('/onboarding');
+    }
   }
 
   @override

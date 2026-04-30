@@ -1,36 +1,42 @@
 // lib/screens/home/home_screen.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../utils/constants.dart';
 import '../../utils/theme.dart';
+import '../../models/summary.dart';
 import '../../models/insight.dart';
+import '../../providers/history_provider.dart';
+import '../../providers/preferences_provider.dart';
+import '../../providers/insights_provider.dart';
 import '../analytics/analytics_screen.dart';
 import '../chat/chat_screen.dart';
 import '../camera/camera_screen.dart';
 import '../history/history_screen.dart';
 import '../settings/settings_screen.dart';
+import '../article_detail/article_detail_screen.dart';
 
-class HomeScreen extends StatefulWidget {
+class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  ConsumerState<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class _HomeScreenState extends ConsumerState<HomeScreen> {
   int _selectedIndex = 0;
-
-  final List<Widget> _pages = const [
-    _HomeFeedView(),
-    ChatScreen(),
-    AnalyticsScreen(),
-    HistoryScreen(),
-  ];
 
   @override
   Widget build(BuildContext context) {
+    const pages = [
+      _HomeFeedView(),
+      ChatScreen(),
+      AnalyticsScreen(),
+      HistoryScreen(),
+    ];
+
     return Scaffold(
       backgroundColor: AppColors.bgDark,
-      body: IndexedStack(index: _selectedIndex, children: _pages),
+      body: IndexedStack(index: _selectedIndex, children: pages),
 
       // FAB (Camera)
       floatingActionButton: FloatingActionButton(
@@ -96,14 +102,19 @@ class _HomeScreenState extends State<HomeScreen> {
 
 // ─── Home Feed ───────────────────────────────────────────────────────────────
 
-class _HomeFeedView extends StatelessWidget {
+class _HomeFeedView extends ConsumerWidget {
   const _HomeFeedView();
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final hour = DateTime.now().hour;
     final greeting = hour < 12 ? 'Good Morning' : hour < 18 ? 'Good Afternoon' : 'Good Evening';
-    final insightData = InsightData.mock();
+    final insightAsync = ref.watch(insightDataProvider);
+    final history = ref.watch(historyProvider);
+    final recent  = history.take(5).toList();
+    final prefs   = ref.watch(preferencesProvider);
+    final displayName = prefs.displayName.isNotEmpty ? prefs.displayName : 'User';
+    final initial = displayName[0].toUpperCase();
 
     return CustomScrollView(
       slivers: [
@@ -140,15 +151,15 @@ class _HomeFeedView extends StatelessWidget {
               child: Container(
                 margin: const EdgeInsets.only(right: 16),
                 width: 32, height: 32,
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
                   shape: BoxShape.circle,
-                  gradient: const LinearGradient(
+                  gradient: LinearGradient(
                     colors: [AppColors.amberAccent, AppColors.primaryBlue],
                   ),
                 ),
-                child: const Center(
-                  child: Text('D',
-                    style: TextStyle(color: Colors.white,
+                child: Center(
+                  child: Text(initial,
+                    style: const TextStyle(color: Colors.white,
                         fontSize: 14, fontWeight: FontWeight.w600)),
                 ),
               ),
@@ -179,29 +190,55 @@ class _HomeFeedView extends StatelessWidget {
 
               const SizedBox(height: 24),
 
-              // InsightLens widget
-              _InsightLensCard(data: insightData),
+              // InsightLens widget — live data from API
+              insightAsync.when(
+                data:    (data)  => _InsightLensCard(data: data),
+                loading: ()      => const _InsightLensCardShimmer(),
+                error:   (_, __) => _InsightLensCard(data: InsightData.mock()),
+              ),
 
               const SizedBox(height: 24),
 
               // Recent summaries section
-              const Row(
+              Row(
                 children: [
-                  Text('Recent Summaries',
+                  const Text('Recent Summaries',
                     style: TextStyle(
                       color: AppColors.textPrimary,
                       fontSize: 17, fontWeight: FontWeight.w600,
                     ),
                   ),
-                  Spacer(),
-                  Text('See all',
-                    style: TextStyle(color: AppColors.primaryBlue, fontSize: 13)),
+                  const Spacer(),
+                  GestureDetector(
+                    onTap: () => Navigator.push(context,
+                        MaterialPageRoute(builder: (_) => const HistoryScreen())),
+                    child: const Text('See all',
+                      style: TextStyle(color: AppColors.primaryBlue, fontSize: 13)),
+                  ),
                 ],
               ),
 
               const SizedBox(height: 12),
 
-              ..._mockSummaries().map((s) => _SummaryListTile(summary: s)),
+              if (recent.isEmpty)
+                Container(
+                  padding: const EdgeInsets.all(32),
+                  decoration: BoxDecoration(
+                    color: AppColors.bgCard,
+                    borderRadius: BorderRadius.circular(AppConstants.radiusLg),
+                    border: Border.all(color: AppColors.dividerColor),
+                  ),
+                  child: const Column(
+                    children: [
+                      Icon(Icons.history_rounded, color: AppColors.textHint, size: 36),
+                      SizedBox(height: 8),
+                      Text('No summaries yet. Start chatting!',
+                        style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                    ],
+                  ),
+                )
+              else
+                ...recent.map((s) => _SummaryListTile(summary: s)),
 
               const SizedBox(height: 80), // FAB clearance
             ]),
@@ -210,30 +247,6 @@ class _HomeFeedView extends StatelessWidget {
       ],
     );
   }
-
-  List<_MockSummary> _mockSummaries() => [
-    _MockSummary(
-      headline: 'NVIDIA surpasses \$3T market cap amid AI chip demand surge',
-      bullets: ['Revenue up 122% YoY', 'H100 GPU demand still outpacing supply', 'New Blackwell architecture ships Q2'],
-      sentiment: 'positive',
-      timeAgo: '2h ago',
-      source: 'Reuters',
-    ),
-    _MockSummary(
-      headline: 'Pakistan\'s IMF deal faces fresh hurdle over energy reforms',
-      bullets: ['IMF demands circular debt plan', 'Govt. proposes 3-year restructuring', 'Next tranche of \$1.1B at stake'],
-      sentiment: 'negative',
-      timeAgo: '5h ago',
-      source: 'Dawn',
-    ),
-    _MockSummary(
-      headline: 'OpenAI releases GPT-5 with multimodal reasoning capabilities',
-      bullets: ['Significantly better at complex reasoning', 'Native image & audio understanding', 'Available to Plus subscribers first'],
-      sentiment: 'positive',
-      timeAgo: '8h ago',
-      source: 'The Verge',
-    ),
-  ];
 }
 
 // ─── Quick Actions ────────────────────────────────────────────────────────────
@@ -332,22 +345,22 @@ class _InsightLensCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
+            const Row(
               children: [
-                const Icon(Icons.insights_rounded,
+                Icon(Icons.insights_rounded,
                   color: AppColors.primaryBlue, size: 18),
-                const SizedBox(width: 6),
-                const Text('InsightLens',
+                SizedBox(width: 6),
+                Text('InsightLens',
                   style: TextStyle(
                     color: AppColors.primaryBlue,
                     fontSize: 13, fontWeight: FontWeight.w600, letterSpacing: 0.3,
                   ),
                 ),
-                const Spacer(),
-                const Text('Today',
+                Spacer(),
+                Text('Today',
                   style: TextStyle(color: AppColors.textHint, fontSize: 11)),
-                const SizedBox(width: 4),
-                const Icon(Icons.arrow_forward_ios_rounded,
+                SizedBox(width: 4),
+                Icon(Icons.arrow_forward_ios_rounded,
                     color: AppColors.textHint, size: 11),
               ],
             ),
@@ -454,19 +467,61 @@ class _SentimentDot extends StatelessWidget {
   );
 }
 
-// ─── Summary List Tile ────────────────────────────────────────────────────────
+// ─── InsightLens Shimmer (loading state) ──────────────────────────────────────
 
-class _MockSummary {
-  final String headline, sentiment, timeAgo, source;
-  final List<String> bullets;
-  const _MockSummary({
-    required this.headline, required this.bullets,
-    required this.sentiment, required this.timeAgo, required this.source,
-  });
+class _InsightLensCardShimmer extends StatelessWidget {
+  const _InsightLensCardShimmer();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.bgCard,
+        borderRadius: BorderRadius.circular(AppConstants.radiusLg),
+        border: Border.all(color: AppColors.dividerColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _shimmerBox(120, 14),
+          const SizedBox(height: 16),
+          _shimmerBox(180, 16),
+          const SizedBox(height: 8),
+          _shimmerBox(100, 12),
+          const SizedBox(height: 12),
+          _shimmerBox(double.infinity, 8),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              _shimmerBox(80, 12),
+              const SizedBox(width: 16),
+              _shimmerBox(80, 12),
+              const SizedBox(width: 16),
+              _shimmerBox(80, 12),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _shimmerBox(double width, double height) {
+    return Container(
+      width: width,
+      height: height,
+      decoration: BoxDecoration(
+        color: AppColors.dividerColor.withOpacity(0.3),
+        borderRadius: BorderRadius.circular(4),
+      ),
+    );
+  }
 }
 
+// ─── Summary List Tile (uses real Summary model) ──────────────────────────────
+
 class _SummaryListTile extends StatelessWidget {
-  final _MockSummary summary;
+  final Summary summary;
   const _SummaryListTile({required this.summary});
 
   Color get _sentimentColor {
@@ -477,9 +532,20 @@ class _SummaryListTile extends StatelessWidget {
     }
   }
 
+  String get _timeAgo {
+    final diff = DateTime.now().difference(summary.createdAt);
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    return '${summary.createdAt.day}/${summary.createdAt.month}';
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return GestureDetector(
+      onTap: () => Navigator.push(context,
+          MaterialPageRoute(builder: (_) => ArticleDetailScreen(summary: summary))),
+      child: Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -513,7 +579,7 @@ class _SummaryListTile extends StatelessWidget {
                 ),
               ),
               const Spacer(),
-              Text(summary.timeAgo,
+              Text(_timeAgo,
                 style: const TextStyle(
                     color: AppColors.textHint, fontSize: 11)),
             ],
@@ -560,15 +626,21 @@ class _SummaryListTile extends StatelessWidget {
 
           Row(
             children: [
-              const Icon(Icons.language_rounded,
-                  color: AppColors.textHint, size: 12),
+              Icon(_inputIcon, color: AppColors.textHint, size: 12),
               const SizedBox(width: 4),
-              Text(summary.source,
+              Text(summary.inputType,
                 style: const TextStyle(
                     color: AppColors.textHint, fontSize: 11)),
               const Spacer(),
-              const Icon(Icons.bookmark_border_rounded,
-                  color: AppColors.textHint, size: 16),
+              Icon(
+                summary.isBookmarked
+                    ? Icons.bookmark_rounded
+                    : Icons.bookmark_border_rounded,
+                color: summary.isBookmarked
+                    ? AppColors.amberAccent
+                    : AppColors.textHint,
+                size: 16,
+              ),
               const SizedBox(width: 12),
               const Icon(Icons.ios_share_rounded,
                   color: AppColors.textHint, size: 16),
@@ -576,6 +648,16 @@ class _SummaryListTile extends StatelessWidget {
           ),
         ],
       ),
+    ),
     );
+  }
+
+  IconData get _inputIcon {
+    switch (summary.inputType) {
+      case 'voice': return Icons.mic_rounded;
+      case 'url':   return Icons.link_rounded;
+      case 'ocr':   return Icons.document_scanner_rounded;
+      default:      return Icons.text_fields_rounded;
+    }
   }
 }
