@@ -1,6 +1,8 @@
 // lib/screens/home/home_screen.dart
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shimmer/shimmer.dart';
 import '../../utils/constants.dart';
 import '../../utils/theme.dart';
 import '../../models/summary.dart';
@@ -113,139 +115,155 @@ class _HomeFeedView extends ConsumerWidget {
     final history = ref.watch(historyProvider);
     final recent  = history.take(5).toList();
     final prefs   = ref.watch(preferencesProvider);
-    final displayName = prefs.displayName.isNotEmpty ? prefs.displayName : 'User';
-    final initial = displayName[0].toUpperCase();
+    final displayName = prefs.displayName.isNotEmpty ? prefs.displayName : (prefs.email.isNotEmpty ? prefs.email.split('@')[0] : 'User');
+    final initial = displayName.isNotEmpty ? displayName[0].toUpperCase() : 'U';
 
-    return CustomScrollView(
-      slivers: [
-        // App bar
-        SliverAppBar(
-          pinned: true,
-          title: Row(
-            children: [
-              Container(
-                width: 28, height: 28,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [AppColors.primaryBlue, AppColors.purpleAi],
+    return Stack(
+      children: [
+        Positioned(top: -50, right: -50, child: _Glow(color: AppColors.primaryBlue.withOpacity(0.08))),
+        CustomScrollView(
+          slivers: [
+            // App bar
+            SliverAppBar(
+              pinned: true,
+              title: Row(
+                children: [
+                  Container(
+                    width: 28, height: 28,
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [AppColors.primaryBlue, AppColors.purpleAi],
+                      ),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Center(
+                      child: Text('B', style: TextStyle(color: Colors.white,
+                          fontWeight: FontWeight.w700, fontSize: 16)),
+                    ),
                   ),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: const Center(
-                  child: Text('B', style: TextStyle(color: Colors.white,
-                      fontWeight: FontWeight.w700, fontSize: 16)),
-                ),
+                  const SizedBox(width: 8),
+                  const Text('Briefly AI'),
+                ],
               ),
-              const SizedBox(width: 8),
-              const Text('Briefly AI'),
-            ],
-          ),
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.notifications_none_rounded),
-              onPressed: () {},
-            ),
-            GestureDetector(
-              onTap: () => Navigator.push(context,
-                  MaterialPageRoute(builder: (_) => const SettingsScreen())),
-              child: Container(
-                margin: const EdgeInsets.only(right: 16),
-                width: 32, height: 32,
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: LinearGradient(
-                    colors: [AppColors.amberAccent, AppColors.primaryBlue],
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.notifications_none_rounded),
+                  onPressed: () {},
+                ),
+                GestureDetector(
+                  onTap: () => Navigator.push(context,
+                      MaterialPageRoute(builder: (_) => const SettingsScreen())),
+                  child: Container(
+                    margin: const EdgeInsets.only(right: 16),
+                    width: 32, height: 32,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        colors: [AppColors.amberAccent, AppColors.primaryBlue],
+                      ),
+                    ),
+                    child: Center(
+                      child: Text(initial,
+                        style: const TextStyle(color: Colors.white,
+                            fontSize: 14, fontWeight: FontWeight.w600)),
+                    ),
                   ),
                 ),
-                child: Center(
-                  child: Text(initial,
-                    style: const TextStyle(color: Colors.white,
-                        fontSize: 14, fontWeight: FontWeight.w600)),
-                ),
+              ],
+            ),
+
+            SliverPadding(
+              padding: const EdgeInsets.all(AppConstants.paddingLg),
+              sliver: SliverList(
+                delegate: SliverChildListDelegate([
+                  // Greeting
+                  Text('$greeting 👋',
+                    style: const TextStyle(
+                      color: AppColors.textSecondary, fontSize: 13)),
+                  const SizedBox(height: 4),
+                  const Text('Here\'s your news briefing',
+                    style: TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 22, fontWeight: FontWeight.w700, letterSpacing: -0.5,
+                    ),
+                  ),
+
+                  const SizedBox(height: 20),
+
+                  // Quick action pills
+                  _QuickActions(),
+
+                  const SizedBox(height: 24),
+
+                  // InsightLens widget — live data from API
+                  insightAsync.when(
+                    data:    (data)  => _InsightLensCard(data: data),
+                    loading: ()      => const _InsightLensCardShimmer(),
+                    error:   (_, __) => _InsightLensCard(data: InsightData.mock()),
+                  ),
+
+                  const SizedBox(height: 24),
+
+                  // Recent summaries section
+                  Row(
+                    children: [
+                      const Text('Recent Summaries',
+                        style: TextStyle(
+                          color: AppColors.textPrimary,
+                          fontSize: 17, fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const Spacer(),
+                      GestureDetector(
+                        onTap: () => Navigator.push(context,
+                            MaterialPageRoute(builder: (_) => const HistoryScreen())),
+                        child: const Text('See all',
+                          style: TextStyle(color: AppColors.primaryBlue, fontSize: 13)),
+                      ),
+                    ],
+                  ),
+
+                  const SizedBox(height: 12),
+
+                  if (recent.isEmpty)
+                    Container(
+                      padding: const EdgeInsets.all(32),
+                      decoration: BoxDecoration(
+                        color: AppColors.bgCard,
+                        borderRadius: BorderRadius.circular(AppConstants.radiusLg),
+                        border: Border.all(color: AppColors.dividerColor),
+                      ),
+                      child: const Column(
+                        children: [
+                          Icon(Icons.history_rounded, color: AppColors.textHint, size: 36),
+                          SizedBox(height: 8),
+                          Text('No summaries yet. Start chatting!',
+                            style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
+                        ],
+                      ),
+                    )
+                  else
+                    ...recent.map((s) => _SummaryListTile(summary: s)),
+
+                  const SizedBox(height: 80), // FAB clearance
+                ]),
               ),
             ),
           ],
         ),
-
-        SliverPadding(
-          padding: const EdgeInsets.all(AppConstants.paddingLg),
-          sliver: SliverList(
-            delegate: SliverChildListDelegate([
-              // Greeting
-              Text('$greeting 👋',
-                style: const TextStyle(
-                  color: AppColors.textSecondary, fontSize: 13)),
-              const SizedBox(height: 4),
-              const Text('Here\'s your news briefing',
-                style: TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: 22, fontWeight: FontWeight.w700, letterSpacing: -0.5,
-                ),
-              ),
-
-              const SizedBox(height: 20),
-
-              // Quick action pills
-              _QuickActions(),
-
-              const SizedBox(height: 24),
-
-              // InsightLens widget — live data from API
-              insightAsync.when(
-                data:    (data)  => _InsightLensCard(data: data),
-                loading: ()      => const _InsightLensCardShimmer(),
-                error:   (_, __) => _InsightLensCard(data: InsightData.mock()),
-              ),
-
-              const SizedBox(height: 24),
-
-              // Recent summaries section
-              Row(
-                children: [
-                  const Text('Recent Summaries',
-                    style: TextStyle(
-                      color: AppColors.textPrimary,
-                      fontSize: 17, fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const Spacer(),
-                  GestureDetector(
-                    onTap: () => Navigator.push(context,
-                        MaterialPageRoute(builder: (_) => const HistoryScreen())),
-                    child: const Text('See all',
-                      style: TextStyle(color: AppColors.primaryBlue, fontSize: 13)),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 12),
-
-              if (recent.isEmpty)
-                Container(
-                  padding: const EdgeInsets.all(32),
-                  decoration: BoxDecoration(
-                    color: AppColors.bgCard,
-                    borderRadius: BorderRadius.circular(AppConstants.radiusLg),
-                    border: Border.all(color: AppColors.dividerColor),
-                  ),
-                  child: const Column(
-                    children: [
-                      Icon(Icons.history_rounded, color: AppColors.textHint, size: 36),
-                      SizedBox(height: 8),
-                      Text('No summaries yet. Start chatting!',
-                        style: TextStyle(color: AppColors.textSecondary, fontSize: 13)),
-                    ],
-                  ),
-                )
-              else
-                ...recent.map((s) => _SummaryListTile(summary: s)),
-
-              const SizedBox(height: 80), // FAB clearance
-            ]),
-          ),
-        ),
       ],
     );
+  }
+}
+
+class _Glow extends StatelessWidget {
+  final Color color;
+  const _Glow({required this.color});
+  @override
+  Widget build(BuildContext context) {
+    return Container(width: 300, height: 300, decoration: BoxDecoration(
+      shape: BoxShape.circle, boxShadow: [BoxShadow(color: color, blurRadius: 150, spreadRadius: 0)],
+    ));
   }
 }
 
@@ -268,7 +286,8 @@ class _QuickActions extends StatelessWidget {
           icon: Icons.mic_rounded,
           label: 'Voice',
           color: AppColors.purpleAi,
-          onTap: () {},
+          onTap: () => Navigator.push(context,
+              MaterialPageRoute(builder: (_) => const ChatScreen(startWithVoice: true))),
         ),
         const SizedBox(width: 10),
         _ActionPill(
@@ -328,121 +347,137 @@ class _InsightLensCard extends StatelessWidget {
     return GestureDetector(
       onTap: () => Navigator.push(context,
           MaterialPageRoute(builder: (_) => const AnalyticsScreen())),
-      child: Container(
-        padding: const EdgeInsets.all(20),
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [
-              AppColors.primaryBlue.withOpacity(0.12),
-              AppColors.purpleAi.withOpacity(0.06),
-            ],
-          ),
-          borderRadius: BorderRadius.circular(AppConstants.radiusLg),
-          border: Border.all(color: AppColors.primaryBlue.withOpacity(0.25)),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Row(
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(AppConstants.radiusLg),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.05),
+              borderRadius: BorderRadius.circular(AppConstants.radiusLg),
+              border: Border.all(color: Colors.white.withOpacity(0.1)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Icon(Icons.insights_rounded,
-                  color: AppColors.primaryBlue, size: 18),
-                SizedBox(width: 6),
-                Text('InsightLens',
+                const Row(
+                  children: [
+                    Icon(Icons.insights_rounded,
+                      color: AppColors.primaryBlue, size: 18),
+                    SizedBox(width: 6),
+                    Text('InsightLens',
+                      style: TextStyle(
+                        color: AppColors.primaryBlue,
+                        fontSize: 13, fontWeight: FontWeight.w600, letterSpacing: 0.3,
+                      ),
+                    ),
+                    Spacer(),
+                    Text('Today',
+                      style: TextStyle(color: AppColors.textHint, fontSize: 11)),
+                    SizedBox(width: 4),
+                    Icon(Icons.arrow_forward_ios_rounded,
+                        color: AppColors.textHint, size: 11),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                // Sentiment bar
+                const Text('Sentiment Overview',
                   style: TextStyle(
-                    color: AppColors.primaryBlue,
-                    fontSize: 13, fontWeight: FontWeight.w600, letterSpacing: 0.3,
+                    color: AppColors.textPrimary,
+                    fontSize: 15, fontWeight: FontWeight.w600,
                   ),
                 ),
-                Spacer(),
-                Text('Today',
-                  style: TextStyle(color: AppColors.textHint, fontSize: 11)),
-                SizedBox(width: 4),
-                Icon(Icons.arrow_forward_ios_rounded,
-                    color: AppColors.textHint, size: 11),
-              ],
-            ),
-            const SizedBox(height: 16),
+                const SizedBox(height: 4),
+                Text('${data.totalArticlesAnalyzed} articles analysed',
+                  style: const TextStyle(color: AppColors.textHint, fontSize: 11)),
+                const SizedBox(height: 12),
 
-            // Sentiment bar
-            const Text('Sentiment Overview',
-              style: TextStyle(
-                color: AppColors.textPrimary,
-                fontSize: 15, fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 4),
-            Text('${data.totalArticlesAnalyzed} articles analysed',
-              style: const TextStyle(color: AppColors.textHint, fontSize: 11)),
-            const SizedBox(height: 12),
+                Builder(
+                  builder: (context) {
+                    final pos = data.positivePercent.toInt();
+                    final neu = data.neutralPercent.toInt();
+                    final neg = data.negativePercent.toInt();
+                    final total = pos + neu + neg;
+                    
+                    if (total == 0) {
+                      return Container(
+                        height: 8,
+                        width: double.infinity,
+                        decoration: BoxDecoration(
+                          color: AppColors.dividerColor.withOpacity(0.5),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                      );
+                    }
 
-            ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: Row(
-                children: [
-                  Flexible(
-                    flex: data.positivePercent.toInt(),
-                    child: Container(
-                      height: 8,
-                      color: AppColors.greenPositive,
-                    ),
-                  ),
-                  Flexible(
-                    flex: data.neutralPercent.toInt(),
-                    child: Container(
-                      height: 8,
-                      color: AppColors.textHint,
-                    ),
-                  ),
-                  Flexible(
-                    flex: data.negativePercent.toInt(),
-                    child: Container(
-                      height: 8,
-                      color: AppColors.redNegative,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                _SentimentDot(color: AppColors.greenPositive,
-                    label: '${data.positivePercent.toInt()}% Positive'),
-                const SizedBox(width: 16),
-                _SentimentDot(color: AppColors.textHint,
-                    label: '${data.neutralPercent.toInt()}% Neutral'),
-                const SizedBox(width: 16),
-                _SentimentDot(color: AppColors.redNegative,
-                    label: '${data.negativePercent.toInt()}% Negative'),
-              ],
-            ),
-
-            const SizedBox(height: 16),
-
-            // Hot topics
-            const Text('Hot Topics',
-              style: TextStyle(color: AppColors.textPrimary,
-                  fontSize: 13, fontWeight: FontWeight.w600)),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8, runSpacing: 6,
-              children: data.hotTopics.take(4).map((t) => Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: AppColors.bgCard,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: AppColors.dividerColor),
+                    return ClipRRect(
+                      borderRadius: BorderRadius.circular(6),
+                      child: Row(
+                        children: [
+                          if (pos > 0)
+                            Flexible(
+                              flex: pos,
+                              child: Container(height: 8, color: AppColors.greenPositive),
+                            ),
+                          if (neu > 0)
+                            Flexible(
+                              flex: neu,
+                              child: Container(height: 8, color: AppColors.textHint),
+                            ),
+                          if (neg > 0)
+                            Flexible(
+                              flex: neg,
+                              child: Container(height: 8, color: AppColors.redNegative),
+                            ),
+                        ],
+                      ),
+                    );
+                  },
                 ),
-                child: Text(t,
-                  style: const TextStyle(
-                    color: AppColors.textSecondary, fontSize: 11)),
-              )).toList(),
+
+                const SizedBox(height: 10),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      _SentimentDot(color: AppColors.greenPositive,
+                          label: '${data.positivePercent.toInt()}% Positive'),
+                      const SizedBox(width: 16),
+                      _SentimentDot(color: AppColors.textHint,
+                          label: '${data.neutralPercent.toInt()}% Neutral'),
+                      const SizedBox(width: 16),
+                      _SentimentDot(color: AppColors.redNegative,
+                          label: '${data.negativePercent.toInt()}% Negative'),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // Hot topics
+                const Text('Hot Topics',
+                  style: TextStyle(color: AppColors.textPrimary,
+                      fontSize: 13, fontWeight: FontWeight.w600)),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8, runSpacing: 6,
+                  children: data.hotTopics.take(4).map((t) => Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: AppColors.bgCard,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: AppColors.dividerColor),
+                    ),
+                    child: Text(t,
+                      style: const TextStyle(
+                        color: AppColors.textSecondary, fontSize: 11)),
+                  )).toList(),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );
@@ -474,71 +509,26 @@ class _InsightLensCardShimmer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppColors.bgCard,
-        borderRadius: BorderRadius.circular(AppConstants.radiusLg),
-        border: Border.all(color: AppColors.dividerColor),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _shimmerBox(120, 14),
-          const SizedBox(height: 16),
-          _shimmerBox(180, 16),
-          const SizedBox(height: 8),
-          _shimmerBox(100, 12),
-          const SizedBox(height: 12),
-          _shimmerBox(double.infinity, 8),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              _shimmerBox(80, 12),
-              const SizedBox(width: 16),
-              _shimmerBox(80, 12),
-              const SizedBox(width: 16),
-              _shimmerBox(80, 12),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _shimmerBox(double width, double height) {
-    return Container(
-      width: width,
-      height: height,
-      decoration: BoxDecoration(
-        color: AppColors.dividerColor.withOpacity(0.3),
-        borderRadius: BorderRadius.circular(4),
+    return Shimmer.fromColors(
+      baseColor: AppColors.dividerColor,
+      highlightColor: AppColors.dividerColor.withOpacity(0.5),
+      child: Container(
+        height: 200,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: AppColors.bgCard,
+          borderRadius: BorderRadius.circular(AppConstants.radiusLg),
+        ),
       ),
     );
   }
 }
 
-// ─── Summary List Tile (uses real Summary model) ──────────────────────────────
+// ─── Summary List Tile ────────────────────────────────────────────────────────
 
 class _SummaryListTile extends StatelessWidget {
   final Summary summary;
   const _SummaryListTile({required this.summary});
-
-  Color get _sentimentColor {
-    switch (summary.sentiment) {
-      case 'positive': return AppColors.greenPositive;
-      case 'negative': return AppColors.redNegative;
-      default: return AppColors.textHint;
-    }
-  }
-
-  String get _timeAgo {
-    final diff = DateTime.now().difference(summary.createdAt);
-    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
-    if (diff.inHours < 24) return '${diff.inHours}h ago';
-    if (diff.inDays < 7) return '${diff.inDays}d ago';
-    return '${summary.createdAt.day}/${summary.createdAt.month}';
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -546,118 +536,59 @@ class _SummaryListTile extends StatelessWidget {
       onTap: () => Navigator.push(context,
           MaterialPageRoute(builder: (_) => ArticleDetailScreen(summary: summary))),
       child: Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: AppColors.bgCard,
-        borderRadius: BorderRadius.circular(AppConstants.radiusLg),
-        border: Border.all(color: AppColors.dividerColor),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                decoration: BoxDecoration(
-                  color: _sentimentColor.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(width: 6, height: 6,
-                      decoration: BoxDecoration(
-                        color: _sentimentColor, shape: BoxShape.circle)),
-                    const SizedBox(width: 4),
-                    Text(summary.sentiment[0].toUpperCase() +
-                        summary.sentiment.substring(1),
-                      style: TextStyle(color: _sentimentColor,
-                          fontSize: 10, fontWeight: FontWeight.w600)),
-                  ],
-                ),
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.bgCard,
+          borderRadius: BorderRadius.circular(AppConstants.radiusMd),
+          border: Border.all(color: AppColors.dividerColor),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: 40, height: 40,
+              decoration: BoxDecoration(
+                color: AppColors.primaryBlue.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(12),
               ),
-              const Spacer(),
-              Text(_timeAgo,
-                style: const TextStyle(
-                    color: AppColors.textHint, fontSize: 11)),
-            ],
-          ),
-
-          const SizedBox(height: 10),
-
-          Text(summary.headline,
-            style: const TextStyle(
-              color: AppColors.textPrimary,
-              fontSize: 14, fontWeight: FontWeight.w600, height: 1.35,
+              child: const Icon(Icons.article_rounded, color: AppColors.primaryBlue, size: 20),
             ),
-          ),
-
-          const SizedBox(height: 10),
-
-          ...summary.bullets.map((b) => Padding(
-            padding: const EdgeInsets.only(bottom: 4),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  margin: const EdgeInsets.only(top: 5),
-                  width: 4, height: 4,
-                  decoration: const BoxDecoration(
-                    color: AppColors.primaryBlue,
-                    shape: BoxShape.circle,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(b,
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(summary.headline,
+                    maxLines: 2, overflow: TextOverflow.ellipsis,
                     style: const TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 12, height: 1.4,
+                      color: AppColors.textPrimary,
+                      fontSize: 14, fontWeight: FontWeight.w600, height: 1.3,
                     ),
                   ),
-                ),
-              ],
-            ),
-          )),
-
-          const SizedBox(height: 10),
-
-          Row(
-            children: [
-              Icon(_inputIcon, color: AppColors.textHint, size: 12),
-              const SizedBox(width: 4),
-              Text(summary.inputType,
-                style: const TextStyle(
-                    color: AppColors.textHint, fontSize: 11)),
-              const Spacer(),
-              Icon(
-                summary.isBookmarked
-                    ? Icons.bookmark_rounded
-                    : Icons.bookmark_border_rounded,
-                color: summary.isBookmarked
-                    ? AppColors.amberAccent
-                    : AppColors.textHint,
-                size: 16,
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      Container(width: 6, height: 6,
+                        decoration: BoxDecoration(
+                          color: summary.sentiment == 'positive'
+                              ? AppColors.greenPositive
+                              : summary.sentiment == 'negative'
+                              ? AppColors.redNegative
+                              : AppColors.textHint,
+                          shape: BoxShape.circle,
+                        )),
+                      const SizedBox(width: 6),
+                      Text('${summary.sentiment[0].toUpperCase()}${summary.sentiment.substring(1)}',
+                        style: const TextStyle(color: AppColors.textHint, fontSize: 11)),
+                    ],
+                  ),
+                ],
               ),
-              const SizedBox(width: 12),
-              const Icon(Icons.ios_share_rounded,
-                  color: AppColors.textHint, size: 16),
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
-    ),
     );
-  }
-
-  IconData get _inputIcon {
-    switch (summary.inputType) {
-      case 'voice': return Icons.mic_rounded;
-      case 'url':   return Icons.link_rounded;
-      case 'ocr':   return Icons.document_scanner_rounded;
-      default:      return Icons.text_fields_rounded;
-    }
   }
 }

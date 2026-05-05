@@ -2,8 +2,9 @@ class AppConstants {
   static const String appName    = 'Briefly AI';
   static const String appTagline = 'News, Briefed & Visualized';
   static const String appVersion = '1.0.0';
+  static const String googleClientId = '42588087428-fqv20t82af0vbpivsl8kc4uv7a7ju5gq.apps.googleusercontent.com';
 
-  static const String apiBaseUrl   = 'http://localhost:8000';
+  static const String apiBaseUrl   = 'http://10.7.184.87:8000';
   static const String apiSummarize = '/summarize';
   static const String apiTranslate = '/translate';
   static const String apiInsights  = '/insights';

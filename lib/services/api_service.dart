@@ -2,6 +2,8 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../utils/constants.dart';
+import 'auth_service.dart';
+
 
 // ── Response models ────────────────────────────────────────────────────────────
 
@@ -63,6 +65,8 @@ class InsightsResponse {
   final List<Map<String, dynamic>> topEntities;   // [{name, type, mentions, sentiment}]
   final List<String> hotTopics;
 
+  final Map<String, dynamic>? data;
+
   const InsightsResponse({
     required this.positivePercent,
     required this.negativePercent,
@@ -71,6 +75,7 @@ class InsightsResponse {
     required this.trendPoints,
     required this.topEntities,
     required this.hotTopics,
+    this.data,
   });
 
   factory InsightsResponse.fromJson(Map<String, dynamic> j) {
@@ -82,6 +87,49 @@ class InsightsResponse {
       trendPoints:     List<Map<String, dynamic>>.from(j['trend_points'] ?? []),
       topEntities:     List<Map<String, dynamic>>.from(j['top_entities'] ?? []),
       hotTopics:       List<String>.from(j['hot_topics'] ?? []),
+      data:            j,
+    );
+  }
+}
+
+class MiningCluster {
+  final int id;
+  final List<String> themeKeywords;
+  final int articleCount;
+  final List<String> topArticles;
+
+  const MiningCluster({
+    required this.id,
+    required this.themeKeywords,
+    required this.articleCount,
+    required this.topArticles,
+  });
+
+  factory MiningCluster.fromJson(Map<String, dynamic> j) {
+    return MiningCluster(
+      id:            j['id'] ?? 0,
+      themeKeywords: List<String>.from(j['theme_keywords'] ?? []),
+      articleCount:  j['article_count'] ?? 0,
+      topArticles:   List<String>.from(j['top_articles'] ?? []),
+    );
+  }
+}
+
+class MiningResponse {
+  final List<MiningCluster> clusters;
+  final int totalAnalyzed;
+
+  const MiningResponse({
+    required this.clusters,
+    required this.totalAnalyzed,
+  });
+
+  factory MiningResponse.fromJson(Map<String, dynamic> j) {
+    return MiningResponse(
+      clusters: (j['clusters'] as List?)
+              ?.map((c) => MiningCluster.fromJson(c))
+              .toList() ?? [],
+      totalAnalyzed: j['total_analyzed'] ?? 0,
     );
   }
 }
@@ -124,10 +172,19 @@ class ApiService {
 
   // ── Headers ──────────────────────────────────────────────────────────────────
 
-  Map<String, String> get _headers => {
-    'Content-Type': 'application/json',
-    'Accept':       'application/json',
-  };
+  Map<String, String> get _headers {
+    final headers = {
+      'Content-Type': 'application/json',
+      'Accept':       'application/json',
+    };
+    
+    final token = AuthService.instance.token;
+    if (token != null) {
+      headers['Authorization'] = 'Bearer $token';
+    }
+    
+    return headers;
+  }
 
   // ── 1. Summarise ──────────────────────────────────────────────────────────────
   // Accepts plain text, a URL, or OCR-extracted text.
@@ -225,7 +282,49 @@ class ApiService {
     }
   }
 
-  // ── 4. Health check ───────────────────────────────────────────────────────────
+  // ── 4. Data Mining Clusters ───────────────────────────────────────────────────
+
+  Future<ApiResult<MiningResponse>> getMiningClusters({
+    required String topic,
+  }) async {
+    try {
+      final uri = Uri.parse('$_base/mining/clusters').replace(
+        queryParameters: {'topic': topic},
+      );
+
+      final response = await _client
+          .get(uri, headers: _headers)
+          .timeout(const Duration(seconds: 40)); // data mining takes time
+
+      return _handleResponse<MiningResponse>(
+        response,
+        (json) => MiningResponse.fromJson(json),
+      );
+    } catch (e) {
+      return ApiResult.failure(_friendlyError(e));
+    }
+  }
+
+  // ── 5. Advanced Mining ────────────────────────────────────────────────────────
+
+  Future<ApiResult<Map<String, dynamic>>> getAdvancedMining({
+    required String region,
+  }) async {
+    try {
+      final uri = Uri.parse('$_base/mining/advanced').replace(
+        queryParameters: {'region': region},
+      );
+      final response = await _client.get(uri, headers: _headers).timeout(const Duration(seconds: 45));
+      if (response.statusCode == 200) {
+        return ApiResult.success(jsonDecode(response.body));
+      }
+      return ApiResult.failure('Server error ${response.statusCode}');
+    } catch (e) {
+      return ApiResult.failure(_friendlyError(e));
+    }
+  }
+
+  // ── 6. Health check ───────────────────────────────────────────────────────────
   // Call this on app start to verify backend is reachable.
 
   Future<bool> isBackendReachable() async {

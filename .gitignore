@@ -11,6 +11,12 @@
 .svn/
 .swiftpm/
 migrate_working_dir/
+briefly.db
+*.db
+
+# OS
+.DS_Store
+Thumbs.db
 
 # IntelliJ related
 *.iml
@@ -27,13 +33,24 @@ migrate_working_dir/
 **/doc/api/
 **/ios/Flutter/.last_build_id
 .env
+key.properties
+*.jks
+*.keystore
 .dart_tool/
 .flutter-plugins-dependencies
 .pub-cache/
 .pub/
 /build/
 /coverage/
+.packages
 
+# Python backend
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+*.egg-info/
 # Symbolication related
 app.*.symbols
 
@@ -44,3 +61,6 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Heap dumps
+*.hprof

@@ -4,14 +4,6 @@ import '../models/insight.dart';
 import '../services/api_service.dart';
 import 'preferences_provider.dart';
 
-/// Loads InsightLens data from the backend for the user's current
-/// region and interests.  Falls back to [InsightData.mock()] when
-/// the request fails so the UI always has something to show.
-///
-/// Uses [FutureProvider.autoDispose] so the request is re-fired
-/// whenever the provider is first watched after being released.
-/// Since [preferencesProvider] is watched inside, any change to
-/// region or interests will also trigger a refresh.
 final insightDataProvider =
     FutureProvider.autoDispose<InsightData>((ref) async {
   final prefs = ref.watch(preferencesProvider);
@@ -44,9 +36,15 @@ final insightDataProvider =
                 type:      te['type']?.toString()      ?? 'company',
               ))
           .toList(),
+      sentimentVolatility: (result.data?.data?['sentiment_volatility'] ?? 0.0).toDouble(),
+      entityPulse: (result.data?.data?['entity_pulse'] as List? ?? [])
+          .map((ep) => EntityPulse(
+                name:   ep['name']?.toString() ?? '',
+                points: List<double>.from((ep['pulse'] as List? ?? []).map((p) => (p ?? 0.0).toDouble())),
+              ))
+          .toList(),
     );
   }
 
-  // Backend unreachable — use demo data so InsightLens is never blank.
   return InsightData.mock();
 });

@@ -66,5 +66,11 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Briefly AI needs microphone access for voice input.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Briefly AI uses speech recognition to convert your voice to text.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Briefly AI uses the camera to scan printed text.</string>
 </dict>
 </plist>

@@ -7,3 +7,6 @@ pyjwt
 aiosqlite
 python-multipart
 httpx
+email-validator
+duckduckgo-search
+scikit-learn

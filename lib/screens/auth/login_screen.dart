@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../services/auth_service.dart';
 import '../../utils/constants.dart';
+import '../../providers/preferences_provider.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -21,6 +22,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     setState(() => _isLoading = false);
 
     if (success && mounted) {
+      final user = AuthService.instance.user;
+      if (user != null) {
+        ref.read(preferencesProvider.notifier).updateProfile(
+          displayName: user['full_name'] ?? user['email']?.split('@')[0],
+          email: user['email'],
+        );
+      }
       Navigator.of(context).pushReplacementNamed('/home');
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -65,7 +73,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     const SizedBox(height: 8),
                     Text(
                       AppConstants.appTagline,
-                      style: theme.textTheme.bodyMedium?.copyWith(color: Colors.slateGrey),
+                      style: theme.textTheme.bodyMedium?.copyWith(color: const Color(0xFF94A3B8)),
                     ),
                   ],
                 ),
@@ -91,8 +99,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black54)
                     )
                   : Image.network(
-                      'https://upload.wikimedia.org/wikipedia/commons/thumb/c/c1/Google_Color_Logo.svg/1200px-Google_Color_Logo.svg.png',
+                      'https://www.gstatic.com/images/branding/product/1x/gsa_512dp.png',
                       height: 24,
+                      errorBuilder: (context, error, stackTrace) => const Icon(Icons.account_circle, size: 24, color: Colors.blueAccent),
                     ),
                 label: const Text(
                   'Continue with Google',

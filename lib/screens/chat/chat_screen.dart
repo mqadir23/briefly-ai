@@ -13,7 +13,8 @@ import '../../services/speech_service.dart';
 import '../camera/camera_screen.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
-  const ChatScreen({super.key});
+  final bool startWithVoice;
+  const ChatScreen({super.key, this.startWithVoice = false});
 
   @override
   ConsumerState<ChatScreen> createState() => _ChatScreenState();
@@ -24,6 +25,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   final ScrollController _scrollCtrl = ScrollController();
   bool _isLoading = false;
   bool _isListening = false;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.startWithVoice) {
+      WidgetsBinding.instance.addPostFrameCallback((_) => _toggleListening());
+    }
+  }
 
   @override
   void dispose() {
@@ -105,7 +114,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       appBar: AppBar(
         title: const Text('Chat'),
         actions: [
-          // ELI5 toggle
           GestureDetector(
             onTap: () async {
               final prefs = ref.read(preferencesProvider);
@@ -147,7 +155,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               ),
             ),
           ),
-          // Clear chat
           IconButton(
             icon: const Icon(Icons.delete_outline_rounded, size: 20),
             onPressed: () => ref.read(chatProvider.notifier).clearChat(),
@@ -171,8 +178,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       ),
     );
   }
-
-  // ── Welcome state ─────────────────────────────────────────────────────────
 
   Widget _buildWelcome() {
     return Center(
@@ -217,8 +222,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       ),
     );
   }
-
-  // ── Message rendering ─────────────────────────────────────────────────────
 
   Widget _buildMessage(ChatMessage msg) {
     if (msg.role == MessageRole.user) return _buildUserBubble(msg);
@@ -364,7 +367,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             const SizedBox(height: 8),
             TextButton(
               onPressed: () {
-                // Retry: find the last user message and re-send
                 final messages = ref.read(chatProvider);
                 final lastUser = messages.lastWhere(
                   (m) => m.role == MessageRole.user,
@@ -415,7 +417,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Sentiment badge
             Row(
               children: [
                 Container(
@@ -444,7 +445,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   ),
                 ),
                 const Spacer(),
-                // Bookmark
                 GestureDetector(
                   onTap: () => ref.read(historyProvider.notifier).toggleBookmark(s.id),
                   child: Icon(
@@ -459,10 +459,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 ),
               ],
             ),
-
             const SizedBox(height: 12),
-
-            // Headline
             Text(
               headline,
               style: const TextStyle(
@@ -470,50 +467,40 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 fontSize: 15, fontWeight: FontWeight.w600, height: 1.3,
               ),
             ),
-
             const SizedBox(height: 12),
-
-            // Numbered bullets
-            ...bullets
-                .asMap()
-                .entries
-                .map((e) => Padding(
-                      padding: const EdgeInsets.only(bottom: 6),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(
-                            width: 18, height: 18,
-                            margin: const EdgeInsets.only(right: 8, top: 1),
-                            decoration: BoxDecoration(
-                              color: AppColors.primaryBlue.withOpacity(0.12),
-                              shape: BoxShape.circle,
-                            ),
-                            child: Center(
-                              child: Text('${e.key + 1}',
-                                style: const TextStyle(
-                                  color: AppColors.primaryBlue,
-                                  fontSize: 10, fontWeight: FontWeight.w700,
-                                )),
-                            ),
-                          ),
-                          Expanded(
-                            child: Text(e.value,
-                              style: const TextStyle(
-                                color: AppColors.textSecondary,
-                                fontSize: 13, height: 1.45,
-                              )),
-                          ),
-                        ],
-                      ),
-                    )),
-
+            ...bullets.asMap().entries.map((e) => Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 18, height: 18,
+                    margin: const EdgeInsets.only(right: 8, top: 1),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryBlue.withOpacity(0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(
+                      child: Text('${e.key + 1}',
+                        style: const TextStyle(
+                          color: AppColors.primaryBlue,
+                          fontSize: 10, fontWeight: FontWeight.w700,
+                        )),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(e.value,
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
+                        fontSize: 13, height: 1.45,
+                      )),
+                  ),
+                ],
+              ),
+            )),
             const SizedBox(height: 10),
-
-            // Action row
             Row(
               children: [
-                // Translate
                 _ActionChip(
                   icon: Icons.translate_rounded,
                   label: showTranslated ? 'Original' : 'Translate',
@@ -531,7 +518,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                   },
                 ),
                 const SizedBox(width: 8),
-                // Share
                 _ActionChip(
                   icon: Icons.ios_share_rounded,
                   label: 'Share',
@@ -554,85 +540,69 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     );
   }
 
-  // ── Input bar ─────────────────────────────────────────────────────────────
-
   Widget _buildInputBar() {
-    return SafeArea(
-      top: false,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
-        decoration: const BoxDecoration(
-          color: AppColors.bgDark,
-          border: Border(top: BorderSide(color: AppColors.dividerColor)),
-        ),
-        child: Row(
-          children: [
-            // Camera
-            IconButton(
-              icon: const Icon(Icons.document_scanner_rounded,
-                  color: AppColors.amberAccent, size: 20),
-              onPressed: _openCamera,
-            ),
-            // Mic — voice input
-            IconButton(
-              icon: Icon(
-                _isListening ? Icons.mic_off_rounded : Icons.mic_rounded,
-                color: _isListening ? AppColors.redNegative : AppColors.purpleAi,
-                size: 20,
+    return Container(
+      padding: const EdgeInsets.fromLTRB(8, 8, 8, 20),
+      decoration: BoxDecoration(
+        color: AppColors.bgDark,
+        border: Border(top: BorderSide(color: AppColors.dividerColor.withOpacity(0.5))),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          _RoundInputBtn(
+            icon: Icons.document_scanner_rounded,
+            color: AppColors.amberAccent,
+            onTap: _openCamera,
+          ),
+          const SizedBox(width: 4),
+          _RoundInputBtn(
+            icon: _isListening ? Icons.mic_off_rounded : Icons.mic_rounded,
+            color: _isListening ? AppColors.redNegative : AppColors.purpleAi,
+            onTap: _toggleListening,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: AppColors.bgCard,
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: AppColors.dividerColor),
               ),
-              onPressed: _toggleListening,
-            ),
-            // Text input
-            Expanded(
               child: TextField(
                 controller: _controller,
+                maxLines: 4,
+                minLines: 1,
+                textInputAction: TextInputAction.send,
                 onSubmitted: (t) => _sendMessage(t),
                 style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
-                decoration: InputDecoration(
-                  hintText: 'Paste URL or type text…',
-                  hintStyle: const TextStyle(color: AppColors.textHint, fontSize: 13),
-                  filled: true,
-                  fillColor: AppColors.bgCard,
-                  contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 10),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(AppConstants.radiusSm),
-                    borderSide: const BorderSide(color: AppColors.dividerColor),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(AppConstants.radiusSm),
-                    borderSide: const BorderSide(color: AppColors.dividerColor),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(AppConstants.radiusSm),
-                    borderSide: const BorderSide(color: AppColors.primaryBlue),
-                  ),
+                decoration: const InputDecoration(
+                  hintText: 'Paste URL or type news...',
+                  hintStyle: TextStyle(color: AppColors.textHint, fontSize: 13),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  border: InputBorder.none,
                 ),
               ),
             ),
-            const SizedBox(width: 8),
-            // Send
-            GestureDetector(
-              onTap: _isLoading ? null : () => _sendMessage(_controller.text),
-              child: Container(
-                width: 40, height: 40,
-                decoration: BoxDecoration(
-                  color: _isLoading
-                      ? AppColors.dividerColor
-                      : AppColors.primaryBlue,
-                  borderRadius: BorderRadius.circular(AppConstants.radiusSm),
-                ),
-                child: const Icon(Icons.send_rounded,
-                    color: Colors.white, size: 18),
+          ),
+          const SizedBox(width: 8),
+          GestureDetector(
+            onTap: _isLoading ? null : () => _sendMessage(_controller.text),
+            child: Container(
+              width: 44, height: 44,
+              decoration: BoxDecoration(
+                color: _isLoading ? AppColors.dividerColor : AppColors.primaryBlue,
+                shape: BoxShape.circle,
               ),
+              child: _isLoading
+                  ? const Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)))
+                  : const Icon(Icons.arrow_upward_rounded, color: Colors.white, size: 22),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
-
-  // ── Helpers ────────────────────────────────────────────────────────────────
 
   IconData _inputIcon(InputType type) {
     switch (type) {
@@ -652,7 +622,27 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   }
 }
 
-// ── Action chip widget ──────────────────────────────────────────────────────
+class _RoundInputBtn extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+  const _RoundInputBtn({required this.icon, required this.color, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 40, height: 40,
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.1),
+          shape: BoxShape.circle,
+        ),
+        child: Icon(icon, color: color, size: 20),
+      ),
+    );
+  }
+}
 
 class _ActionChip extends StatelessWidget {
   final IconData icon;

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 import 'package:hive_flutter/hive_flutter.dart';
@@ -9,6 +10,7 @@ class AuthService {
   static final AuthService instance = AuthService._();
 
   final GoogleSignIn _googleSignIn = GoogleSignIn(
+    clientId: kIsWeb ? AppConstants.googleClientId : null,
     scopes: ['email', 'profile'],
   );
 
@@ -37,23 +39,21 @@ class AuthService {
   Future<bool> signInWithGoogle() async {
     try {
       final GoogleSignInAccount? googleUser = await _googleSignIn.signIn();
-      if (googleUser == null) return false; // User cancelled
+      if (googleUser == null) return false;
 
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
-      final String? idToken = googleAuth.idToken;
-
-      if (idToken == null) return false;
-
-      // Send to our backend
       final response = await _client.post(
         Uri.parse('${AppConstants.apiBaseUrl}${AppConstants.apiAuthGoogle}'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'id_token': idToken}),
-      );
+        body: jsonEncode({
+          'email': googleUser.email,
+          'full_name': googleUser.displayName ?? '',
+          'google_id': googleUser.id,
+        }),
+      ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        await _saveAuthData(data['access_token'], data['user']);
+        await _saveAuthData(data['token'], data['user']);
         return true;
       }
       return false;
@@ -69,7 +69,7 @@ class AuthService {
         Uri.parse('${AppConstants.apiBaseUrl}${AppConstants.apiAuthLogin}'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'email': email, 'password': password}),
-      );
+      ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
@@ -92,7 +92,7 @@ class AuthService {
           'password': password,
           'full_name': name,
         }),
-      );
+      ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
